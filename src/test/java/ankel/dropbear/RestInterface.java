@@ -2,10 +2,8 @@ package ankel.dropbear;
 
 import java.util.Map;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.QueryParam;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
 
 import com.jive.foss.pnky.PnkyPromise;
 
@@ -13,6 +11,7 @@ import com.jive.foss.pnky.PnkyPromise;
  * @author Binh Tran
  */
 @Path("start")
+@Produces(MediaType.APPLICATION_JSON)
 public interface RestInterface
 {
   @Path("{p1}/{p2}")
@@ -26,4 +25,9 @@ public interface RestInterface
   @Path("foo")
   @GET
   PnkyPromise<Map<String, String>> getFoo();
+
+  @Path("foo")
+  @GET
+  @Produces(MediaType.TEXT_PLAIN)
+  PnkyPromise<String> getFooString();
 }

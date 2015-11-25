@@ -2,6 +2,7 @@ package ankel.dropbear;
 
 import java.lang.reflect.Proxy;
 
+import ankel.dropbear.impl.RestClientInvocationHandler;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 
@@ -15,9 +16,9 @@ import com.google.common.base.Supplier;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class RestClientBuilder
 {
-
   private final HttpAsyncClient httpAsyncClient;
   private Supplier<String> urlSupplier = null;
+  private ResponseDeserializer responseDeserializer;
 
   public static RestClientBuilder newBuilder(final HttpAsyncClient httpAsyncClient)
   {
@@ -36,6 +37,12 @@ public class RestClientBuilder
     return this;
   }
 
+  public RestClientBuilder responseDeserializer(final ResponseDeserializer responseDeserializer)
+  {
+    this.responseDeserializer = responseDeserializer;
+    return this;
+  }
+
   @SuppressWarnings("unchecked")
   public final <T> T of(final Class<T> klass)
   {
@@ -47,6 +54,6 @@ public class RestClientBuilder
     return (T) Proxy.newProxyInstance(
         klass.getClassLoader(),
         new Class[] { klass },
-        new RestClientInvocationHandler(urlSupplier, klass, httpAsyncClient));
+        new RestClientInvocationHandler(urlSupplier, klass, httpAsyncClient, responseDeserializer));
   }
 }

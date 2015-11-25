@@ -1,4 +1,4 @@
-package ankel.dropbear;
+package ankel.dropbear.impl;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
