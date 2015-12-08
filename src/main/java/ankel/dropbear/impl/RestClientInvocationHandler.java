@@ -5,12 +5,12 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import javax.print.attribute.standard.Media;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Produces;
@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.concurrent.FutureCallback;
 import org.apache.http.nio.client.HttpAsyncClient;
 
@@ -90,44 +91,13 @@ public final class RestClientInvocationHandler implements InvocationHandler
       throw new IllegalArgumentException("Cannot return raw com.jive.foss.pnky.PnkyPromise type");
     }
 
-    final String uri = RestClientUriBuilderUtils.generateUrl(rootUriSupplier, method, args);
+    final HttpUriRequest httpRequest = createHttpUriRequest(method, args);
 
-    final HttpGet get = new HttpGet(uri);
-
-    final String methodProduces = Optional.ofNullable(method.getAnnotation(Produces.class))
-        .map(Produces::value)
-        .map(this::headerValueFromArray)
-        .orElse(null);
-
-    final String acceptHeader;
-
-    if (methodProduces != null)
-    {
-      acceptHeader = methodProduces;
-    }
-    else if (rootProduces != null)
-    {
-      acceptHeader = rootProduces;
-    }
-    else
-    {
-      acceptHeader = MediaType.WILDCARD;  //TODO: default to wildcard, not sure if that's a good idea.
-    }
-
-    get.setHeader(HttpHeaders.ACCEPT, acceptHeader);
-    get.setHeader(HttpHeaders.USER_AGENT, getClass().getCanonicalName() + " v1");
-
-    final RestClientDeserializer restClientDeserializer =
-        restClientDeserializers.stream()
-            .filter((deserializer) -> deserializer.getSupportedMediaTypes().contains(acceptHeader))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException(
-                "Cannot find suitable deserializer for media type "
-                    + acceptHeader));
+    final RestClientDeserializer restClientDeserializer = setHeaders(httpRequest, method);
 
     final Pnky resultPromise = Pnky.create();
 
-    httpAsyncClient.execute(get, new FutureCallback<HttpResponse>()
+    httpAsyncClient.execute(httpRequest, new FutureCallback<HttpResponse>()
     {
 
       public void completed(final HttpResponse response)
@@ -159,6 +129,47 @@ public final class RestClientInvocationHandler implements InvocationHandler
     });
 
     return resultPromise;
+  }
+
+  private RestClientDeserializer setHeaders(final HttpUriRequest httpRequest, final Method method)
+  {
+    final String methodProduces = Optional.ofNullable(method.getAnnotation(Produces.class))
+        .map(Produces::value)
+        .map(this::headerValueFromArray)
+        .orElse(null);
+
+    final String acceptHeader;
+
+    if (methodProduces != null)
+    {
+      acceptHeader = methodProduces;
+    }
+    else if (rootProduces != null)
+    {
+      acceptHeader = rootProduces;
+    }
+    else
+    {
+      acceptHeader = MediaType.WILDCARD;  //TODO: default to wildcard, not sure if that's a good idea.
+    }
+
+    httpRequest.setHeader(HttpHeaders.ACCEPT, acceptHeader);
+    httpRequest.setHeader(HttpHeaders.USER_AGENT, getClass().getCanonicalName() + " v1");
+
+    return restClientDeserializers.stream()
+        .filter((deserializer) -> deserializer.getSupportedMediaTypes().contains(acceptHeader))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            "Cannot find suitable deserializer for media type "
+                + acceptHeader));
+  }
+
+  private HttpUriRequest createHttpUriRequest(final Method method, final Object[] args)
+      throws URISyntaxException
+  {
+    final String uri = RestClientUriBuilderUtils.generateUrl(rootUriSupplier, method, args);
+
+    return new HttpGet(uri);
   }
 
   private String headerValueFromArray(final String[] array)
