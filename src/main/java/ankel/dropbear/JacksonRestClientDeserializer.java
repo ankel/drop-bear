@@ -5,20 +5,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 
+import javax.ws.rs.core.MediaType;
 import java.io.InputStream;
 import java.lang.reflect.Type;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * @author Ankel (Binh Tran)
  */
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public final class JacksonResponseDeserializer implements ResponseDeserializer
+@RequiredArgsConstructor
+public final class JacksonRestClientDeserializer implements RestClientDeserializer
 {
   private final ObjectMapper mapper;
 
-  public static JacksonResponseDeserializer fromObjectMapper(final ObjectMapper mapper)
+  @Override
+  public List<String> getSupportedMediaTypes()
   {
-    return new JacksonResponseDeserializer(mapper);
+    return Collections.singletonList(MediaType.APPLICATION_JSON);
   }
 
   @Override

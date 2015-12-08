@@ -23,12 +23,13 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 /**
  * @author Binh Tran
  */
-public class UriBuilderTest
+public class RestClientBuilderTest
 {
   @Rule
   public WireMockRule wireMockRule = new WireMockRule(8089);
 
   private CloseableHttpAsyncClient httpAsyncClient;
+  private RestInterface restInterface;
 
   private Method getFooMethod() throws Exception
   {
@@ -41,6 +42,12 @@ public class UriBuilderTest
   {
     httpAsyncClient = HttpAsyncClients.createDefault();
     httpAsyncClient.start();
+
+    restInterface = RestClientBuilder.newBuilder(httpAsyncClient)
+        .url("http://localhost:8089")
+        .addRestClientDeserializer(RawTextRestClientDeserializer.getDefaultInstance())
+        .addRestClientDeserializer(new JacksonRestClientDeserializer(new ObjectMapper()))
+        .of(RestInterface.class);
   }
 
   @After
@@ -71,11 +78,6 @@ public class UriBuilderTest
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN)
             .withBody("Some text")));
 
-    final RestInterface restInterface = RestClientBuilder.newBuilder(httpAsyncClient)
-        .url("http://localhost:8089")
-        .responseDeserializer(RawTextResponseDeserializer.getInstance())
-        .of(RestInterface.class);
-
     assertEquals("Some text", restInterface.getFooString().get());
 
     verify(1, getRequestedFor(urlMatching("/start/foo"))
@@ -93,11 +95,6 @@ public class UriBuilderTest
             .withStatus(200)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
             .withBody("{\"foo\": \"bar\"}")));
-
-    final RestInterface restInterface = RestClientBuilder.newBuilder(httpAsyncClient)
-        .url("http://localhost:8089")
-        .responseDeserializer(JacksonResponseDeserializer.fromObjectMapper(new ObjectMapper()))
-        .of(RestInterface.class);
 
     final Map<String, String> map = restInterface.getFoo().get();
 

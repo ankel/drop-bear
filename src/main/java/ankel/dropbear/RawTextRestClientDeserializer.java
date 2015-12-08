@@ -1,24 +1,35 @@
 package ankel.dropbear;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.CharStreams;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
 
+import javax.ws.rs.core.MediaType;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.util.List;
 
 /**
  * @author Ankel (Binh Tran)
  */
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public final class RawTextResponseDeserializer implements ResponseDeserializer
+public final class RawTextRestClientDeserializer implements RestClientDeserializer
 {
+  @Getter
+  private final List<String> supportedMediaTypes;
 
-  public static RawTextResponseDeserializer getInstance()
+  public static RawTextRestClientDeserializer getDefaultInstance()
   {
-    return new RawTextResponseDeserializer();
+    return new RawTextRestClientDeserializer(MediaType.TEXT_PLAIN);
+  }
+
+  public RawTextRestClientDeserializer(final String type, final String... types)
+  {
+    this.supportedMediaTypes = ImmutableList.<String>builder()
+        .add(type)
+        .add(types)
+        .build();
   }
 
   @Override
@@ -34,7 +45,7 @@ public final class RawTextResponseDeserializer implements ResponseDeserializer
     {
       throw new IllegalArgumentException(
           String.format(
-              "Cannot use RawTextResponseDeserializer with return type %s",
+              "Cannot use RawTextRestClientDeserializer with return type %s",
               type.getTypeName()));
     }
 
@@ -42,7 +53,7 @@ public final class RawTextResponseDeserializer implements ResponseDeserializer
     {
       throw new IllegalArgumentException(
           String.format(
-              "RawTextResponseDeserializer expects String type. Actually got %s",
+              "RawTextRestClientDeserializer expects String type. Actually got %s",
               type.getTypeName()));
     }
 

@@ -2,6 +2,7 @@ package ankel.dropbear;
 
 import java.util.Map;
 
+import javax.print.attribute.standard.Media;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 
@@ -30,4 +31,10 @@ public interface RestInterface
   @GET
   @Produces(MediaType.TEXT_PLAIN)
   PnkyPromise<String> getFooString();
+
+  @Path("foo")
+  @POST
+  @Produces(MediaType.APPLICATION_JSON)
+  @Consumes(MediaType.APPLICATION_JSON)
+  PnkyPromise<Map<String, String>> postFoo(final long value);
 }

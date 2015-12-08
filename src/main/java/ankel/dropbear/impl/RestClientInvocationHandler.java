@@ -1,22 +1,23 @@
 package ankel.dropbear.impl;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import javax.print.attribute.standard.Media;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
 
-import ankel.dropbear.ResponseDeserializer;
-import ankel.dropbear.impl.RestClientUriBuilderUtils;
+import ankel.dropbear.RestClientDeserializer;
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.http.HttpResponse;
@@ -38,17 +39,17 @@ public final class RestClientInvocationHandler implements InvocationHandler
   private final String rootConsume;
   private final String rootProduces;
   private final HttpAsyncClient httpAsyncClient;
-  private final ResponseDeserializer responseDeserializer;
+  private final List<RestClientDeserializer> restClientDeserializers;
 
   public RestClientInvocationHandler(
       final Supplier<String> rootUrlSupplier,
       final Class<?> klass,
       final HttpAsyncClient httpAsyncClient,
-      final ResponseDeserializer responseDeserializer)
+      final List<RestClientDeserializer> restClientDeserializers)
   {
     this.httpAsyncClient = httpAsyncClient;
     this.rootUriSupplier = rootUrlSupplier;
-    this.responseDeserializer = responseDeserializer;
+    this.restClientDeserializers = restClientDeserializers;
 
     this.rootConsume = Optional.ofNullable(klass.getAnnotation(Consumes.class))
         .map(Consumes::value)
@@ -98,17 +99,33 @@ public final class RestClientInvocationHandler implements InvocationHandler
         .map(this::headerValueFromArray)
         .orElse(null);
 
+    final String acceptHeader;
+
     if (methodProduces != null)
     {
-      get.setHeader(HttpHeaders.ACCEPT, methodProduces);
-    } else if (rootProduces != null)
+      acceptHeader = methodProduces;
+    }
+    else if (rootProduces != null)
     {
-      get.setHeader(HttpHeaders.ACCEPT, rootProduces);
+      acceptHeader = rootProduces;
+    }
+    else
+    {
+      acceptHeader = MediaType.WILDCARD;  //TODO: default to wildcard, not sure if that's a good idea.
     }
 
+    get.setHeader(HttpHeaders.ACCEPT, acceptHeader);
     get.setHeader(HttpHeaders.USER_AGENT, getClass().getCanonicalName() + " v1");
 
-    Pnky resultPromise = Pnky.create();
+    final RestClientDeserializer restClientDeserializer =
+        restClientDeserializers.stream()
+            .filter((deserializer) -> deserializer.getSupportedMediaTypes().contains(acceptHeader))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException(
+                "Cannot find suitable deserializer for media type "
+                    + acceptHeader));
+
+    final Pnky resultPromise = Pnky.create();
 
     httpAsyncClient.execute(get, new FutureCallback<HttpResponse>()
     {
@@ -119,7 +136,7 @@ public final class RestClientInvocationHandler implements InvocationHandler
         try
         {
           final InputStream responseStream = response.getEntity().getContent();
-          result = responseDeserializer.deserialize(responseStream, returnedInnerType);
+          result = restClientDeserializer.deserialize(responseStream, returnedInnerType);
         }
         catch (Exception e)
         {
