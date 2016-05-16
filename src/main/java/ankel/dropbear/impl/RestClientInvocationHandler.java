@@ -67,7 +67,7 @@ public final class RestClientInvocationHandler implements InvocationHandler
   public Object invoke(final Object proxy, final Method method, final Object[] args)
       throws Throwable
   {
-    log.debug("Proxy class [{}] method [{}] args [{]]", method.getDeclaringClass(), method, args);
+    log.debug("Proxy class [{}] method [{}] args [{}]", method.getDeclaringClass(), method, args);
 
     if (method.getAnnotation(GET.class) == null)
     {
