@@ -96,15 +96,30 @@ public class RestClientBuilderTest
   }
 
   @Test
-  public void testGet404() throws Exception
+  public void testGet301() throws Exception
   {
+    // from https://en.wikipedia.org/wiki/URL_redirection#Example_HTTP_response_for_a_301_redirect
+    final String movedPage = "<html>\n" +
+        "<head>\n" +
+        "<title>Moved</title>\n" +
+        "</head>\n" +
+        "<body>\n" +
+        "<h1>Moved</h1>\n" +
+        "<p>This page has moved to <a href=\"http://www.example.org/\">http://www.example.org/</a>.</p>\n" +
+        "</body>\n" +
+        "</html>";
+
+    final String movedUrl = "http://www.example.org";
+
     stubFor(get(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
         .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
         .willReturn(aResponse()
             .withStatus(404)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN)
-            .withBody("Not Found response body")));
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML)
+            .withHeader(HttpHeaders.LOCATION, movedUrl)
+            .withBody(movedPage)));
 
     try
     {
@@ -121,7 +136,16 @@ public class RestClientBuilderTest
       final String content = CharStreams.toString(
           new InputStreamReader(responseException.getRawContent(), Charset.defaultCharset()));
 
-      assertEquals("Not Found response body", content);
+      assertEquals(movedPage, content);
+
+      assertEquals(1, responseException.getHeaders().get(HttpHeaders.LOCATION).size());
+      assertTrue(responseException.getHeaders().get(HttpHeaders.LOCATION).contains(movedUrl));
+
+      assertEquals(2, responseException.getHeaders().get(HttpHeaders.CONTENT_TYPE).size());
+      assertTrue(responseException.getHeaders().get(HttpHeaders.CONTENT_TYPE)
+          .contains(MediaType.TEXT_HTML));
+      assertTrue(responseException.getHeaders().get(HttpHeaders.CONTENT_TYPE)
+          .contains(MediaType.TEXT_PLAIN));
     }
 
     verify(1, getRequestedFor(urlEqualTo("/start/foo"))

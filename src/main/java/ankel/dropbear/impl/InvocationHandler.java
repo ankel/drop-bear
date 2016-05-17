@@ -6,9 +6,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URISyntaxException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -21,6 +19,7 @@ import ankel.dropbear.RestClientResponseException;
 import ankel.dropbear.RestClientSerializer;
 import lombok.extern.slf4j.Slf4j;
 
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.*;
@@ -158,8 +157,17 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
           {
             log.error("Failed to extract input stream content from response", e);
           }
+
+          Map<String, List<String>> headers = new HashMap<>();
+
+          for (final Header header : response.getAllHeaders())
+          {
+            headers.computeIfAbsent(header.getName(), (__) -> new ArrayList<>())
+                .add(header.getValue());
+          }
+
           resultPromise.reject(new RestClientResponseException(
-              response.getStatusLine().getStatusCode(), content));
+              response.getStatusLine().getStatusCode(), content, headers));
         }
       }
 
