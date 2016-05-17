@@ -15,7 +15,8 @@ import java.util.List;
  * @author Ankel (Binh Tran)
  */
 @RequiredArgsConstructor
-public final class JacksonRestClientDeserializer implements RestClientDeserializer
+public final class JacksonRestClientSerializationSupport
+    implements RestClientDeserializer, RestClientSerializer
 {
   private final ObjectMapper mapper;
 
@@ -23,6 +24,12 @@ public final class JacksonRestClientDeserializer implements RestClientDeserializ
   public List<String> getSupportedMediaTypes()
   {
     return Collections.singletonList(MediaType.APPLICATION_JSON);
+  }
+
+  @Override
+  public String serialize(final Object object) throws Exception
+  {
+    return mapper.writeValueAsString(object);
   }
 
   @Override

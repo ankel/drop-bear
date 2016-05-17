@@ -1,16 +1,14 @@
 package ankel.dropbear;
 
+import ankel.dropbear.impl.InvocationHandler;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import org.apache.http.nio.client.HttpAsyncClient;
+
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
-
-import ankel.dropbear.impl.RestClientInvocationHandler;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-
-import org.apache.http.nio.client.HttpAsyncClient;
-
-import com.google.common.base.Supplier;
+import java.util.function.Supplier;
 
 /**
  * @author Binh Tran
@@ -21,6 +19,7 @@ public class RestClientBuilder
   private final HttpAsyncClient httpAsyncClient;
   private Supplier<String> urlSupplier = null;
   private List<RestClientDeserializer> restClientDeserializers = new ArrayList<>();
+  private List<RestClientSerializer> restClientSerializers = new ArrayList<>();
 
   public static RestClientBuilder newBuilder(final HttpAsyncClient httpAsyncClient)
   {
@@ -35,13 +34,19 @@ public class RestClientBuilder
 
   public RestClientBuilder url(final String url)
   {
-    this.urlSupplier = () -> url;
+    urlSupplier = () -> url;
     return this;
   }
 
-  public RestClientBuilder addRestClientDeserializer(final RestClientDeserializer restClientDeserializer)
+  public RestClientBuilder addRestClientDeserializer(final RestClientDeserializer deserializer)
   {
-    this.restClientDeserializers.add(restClientDeserializer);
+    restClientDeserializers.add(deserializer);
+    return this;
+  }
+
+  public RestClientBuilder addRestClientSerializer(final RestClientSerializer serializer)
+  {
+    restClientSerializers.add(serializer);
     return this;
   }
 
@@ -56,6 +61,7 @@ public class RestClientBuilder
     return (T) Proxy.newProxyInstance(
         klass.getClassLoader(),
         new Class[] { klass },
-        new RestClientInvocationHandler(urlSupplier, klass, httpAsyncClient, restClientDeserializers));
+        new InvocationHandler(urlSupplier, klass, httpAsyncClient,
+            restClientDeserializers, restClientSerializers));
   }
 }

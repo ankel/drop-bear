@@ -9,22 +9,38 @@ import javax.ws.rs.core.MediaType;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.nio.charset.Charset;
 import java.util.List;
 
 /**
  * @author Ankel (Binh Tran)
  */
-public final class RawTextRestClientDeserializer implements RestClientDeserializer
+public final class RawTextRestClientSerializationSupport
+    implements RestClientDeserializer, RestClientSerializer
 {
   @Getter
   private final List<String> supportedMediaTypes;
 
-  public static RawTextRestClientDeserializer getDefaultInstance()
+  /**
+   * Construct an instance of {@link RawTextRestClientSerializationSupport} with {@code MediaType.TEXT_PLAIN}
+   * as its media type
+   */
+  public static RawTextRestClientSerializationSupport getDefaultInstance()
   {
-    return new RawTextRestClientDeserializer(MediaType.TEXT_PLAIN);
+    return new RawTextRestClientSerializationSupport(MediaType.TEXT_PLAIN);
   }
 
-  public RawTextRestClientDeserializer(final String type, final String... types)
+  /**
+   * Construct an instance of {@link RawTextRestClientSerializationSupport} that supports multiple media type
+   */
+  public static RawTextRestClientSerializationSupport getInstanceForMediaTypes(final String type,
+      final String... types)
+  {
+    return new RawTextRestClientSerializationSupport(type, types);
+  }
+
+
+  private RawTextRestClientSerializationSupport(final String type, final String... types)
   {
     this.supportedMediaTypes = ImmutableList.<String>builder()
         .add(type)
@@ -45,7 +61,7 @@ public final class RawTextRestClientDeserializer implements RestClientDeserializ
     {
       throw new IllegalArgumentException(
           String.format(
-              "Cannot use RawTextRestClientDeserializer with return type %s",
+              "Cannot use RawTextRestClientSerializationSupport with return type %s",
               type.getTypeName()));
     }
 
@@ -53,10 +69,16 @@ public final class RawTextRestClientDeserializer implements RestClientDeserializ
     {
       throw new IllegalArgumentException(
           String.format(
-              "RawTextRestClientDeserializer expects String type. Actually got %s",
+              "RawTextRestClientSerializationSupport expects String type. Actually got %s",
               type.getTypeName()));
     }
 
     return (T) CharStreams.toString(new InputStreamReader(inputStream, Charsets.UTF_8));
+  }
+
+  @Override
+  public String serialize(final Object object)
+  {
+    return String.valueOf(object);
   }
 }

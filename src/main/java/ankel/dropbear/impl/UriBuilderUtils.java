@@ -1,29 +1,25 @@
 package ankel.dropbear.impl;
 
+import lombok.experimental.UtilityClass;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.http.client.utils.URIBuilder;
+
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.QueryParam;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URISyntaxException;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
-
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.QueryParam;
-
-import lombok.experimental.UtilityClass;
-
-import org.apache.commons.lang3.StringUtils;
-import org.apache.http.client.utils.URIBuilder;
-
-import com.google.common.base.Supplier;
+import java.util.function.Supplier;
 
 /**
  * @author Binh Tran
  */
 @UtilityClass
-public class RestClientUriBuilderUtils
+public class UriBuilderUtils
 {
-
   public static String generateUrl(
       final Supplier<String> rootUrlSupplier,
       final Method method,
@@ -49,6 +45,26 @@ public class RestClientUriBuilderUtils
     }
 
     return StringUtils.stripStart(uriBuilder.build().toString(), "/");
+  }
+
+  public static Object getEntityObject(
+      final Method method,
+      final Object[] arguments)
+  {
+    final Parameter[] parameters = method.getParameters();
+
+    for (int i = 0; i < parameters.length; ++i)
+    {
+      if (parameters[i].getAnnotation(PathParam.class) == null &&
+          parameters[i].getAnnotation(QueryParam.class) == null)
+      {
+        return arguments[i];
+      }
+    }
+
+    throw new IllegalArgumentException(
+        String.format("There is no suitable entity argument from [%s]. All arguments are annotated with PathParam or QueryParam",
+        method.toGenericString()));
   }
 
   private static String getPathFromClass(final Class<?> declaringClass)

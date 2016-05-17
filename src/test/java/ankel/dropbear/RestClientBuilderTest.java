@@ -9,7 +9,7 @@ import java.util.Map;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 
-import ankel.dropbear.impl.RestClientUriBuilderUtils;
+import ankel.dropbear.impl.UriBuilderUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
 import org.apache.http.impl.nio.client.HttpAsyncClients;
@@ -30,6 +30,7 @@ public class RestClientBuilderTest
 
   private CloseableHttpAsyncClient httpAsyncClient;
   private RestInterface restInterface;
+  private RestInterface.RequestObject requestObject;
 
   private Method getFooMethod() throws Exception
   {
@@ -45,9 +46,13 @@ public class RestClientBuilderTest
 
     restInterface = RestClientBuilder.newBuilder(httpAsyncClient)
         .url("http://localhost:8089")
-        .addRestClientDeserializer(RawTextRestClientDeserializer.getDefaultInstance())
-        .addRestClientDeserializer(new JacksonRestClientDeserializer(new ObjectMapper()))
+        .addRestClientDeserializer(RawTextRestClientSerializationSupport.getDefaultInstance())
+        .addRestClientDeserializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
+        .addRestClientSerializer(RawTextRestClientSerializationSupport.getDefaultInstance())
+        .addRestClientSerializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
         .of(RestInterface.class);
+
+    requestObject = new RestInterface.RequestObject("42", "answer to everything");
   }
 
   @After
@@ -59,7 +64,7 @@ public class RestClientBuilderTest
   @Test
   public void testPathParams() throws Exception
   {
-    final String s = RestClientUriBuilderUtils.generateUrl(
+    final String s = UriBuilderUtils.generateUrl(
         () -> "http://www.google.com",
         getFooMethod(),
         new Object[] { "foo", 42, "bar", 101L });
@@ -72,7 +77,7 @@ public class RestClientBuilderTest
   {
     stubFor(get(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
-        .withHeader(HttpHeaders.USER_AGENT, containing("RestClientInvocationHandler"))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
         .willReturn(aResponse()
             .withStatus(200)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN)
@@ -80,9 +85,9 @@ public class RestClientBuilderTest
 
     assertEquals("Some text", restInterface.getFooString().get());
 
-    verify(1, getRequestedFor(urlMatching("/start/foo"))
+    verify(1, getRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
-        .withHeader(HttpHeaders.USER_AGENT, containing("RestClientInvocationHandler")));
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler")));
   }
 
   @Test
@@ -90,7 +95,7 @@ public class RestClientBuilderTest
   {
     stubFor(get(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
-        .withHeader(HttpHeaders.USER_AGENT, containing("RestClientInvocationHandler"))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
         .willReturn(aResponse()
             .withStatus(200)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
@@ -98,9 +103,101 @@ public class RestClientBuilderTest
 
     final Map<String, String> map = restInterface.getFoo().get();
 
-    verify(1, getRequestedFor(urlMatching("/start/foo"))
+    verify(1, getRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
-        .withHeader(HttpHeaders.USER_AGENT, containing("RestClientInvocationHandler")));
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler")));
+
+    assertEquals(1, map.size());
+    assertEquals("bar", map.get("foo"));
+  }
+
+  @Test
+  public void testPostJson() throws Exception
+  {
+    stubFor(post(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("42"))
+        .willReturn(aResponse()
+            .withStatus(200)
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
+            .withBody("{\"foo\": \"bar\"}")));
+
+    final Map<String, String> map = restInterface.postFoo(42L).get();
+
+    verify(1, postRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("42")));
+
+    assertEquals(1, map.size());
+    assertEquals("bar", map.get("foo"));
+  }
+
+  @Test
+  public void testPutString() throws Exception
+  {
+    stubFor(put(urlEqualTo("/start/foo"))
+      .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+      .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.TEXT_PLAIN))
+      .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+      .withRequestBody(equalTo("put string"))
+      .willReturn(aResponse()
+          .withStatus(202)
+          .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
+
+    restInterface.putStringReturnVoid("put string").get();
+
+    verify(1, putRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.TEXT_PLAIN))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("put string")));
+  }
+
+  @Test
+  public void testPostObject() throws Exception
+  {
+    stubFor(post(urlEqualTo("/start/foo"))
+      .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+      .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+      .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+      .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}"))
+      .willReturn(aResponse()
+          .withStatus(202)
+          .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
+
+    restInterface.postObjectReturnVoid(requestObject).get();
+
+    verify(1, postRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}")));
+  }
+
+  @Test
+  public void testPutObject() throws Exception
+  {
+    stubFor(put(urlEqualTo("/start/foo"))
+      .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+      .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+      .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+      .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}"))
+      .willReturn(aResponse()
+          .withStatus(200)
+          .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
+          .withBody("{\"foo\": \"bar\"}")));
+
+    final Map<String, String> map = restInterface.putObject(requestObject).get();
+
+    verify(1, putRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}")));
 
     assertEquals(1, map.size());
     assertEquals("bar", map.get("foo"));

@@ -1,7 +1,6 @@
 package ankel.dropbear.impl;
 
 import java.io.InputStream;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -9,24 +8,27 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 
 import ankel.dropbear.RestClientDeserializer;
+import ankel.dropbear.RestClientSerializer;
 import lombok.extern.slf4j.Slf4j;
 
+import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.client.methods.*;
 import org.apache.http.concurrent.FutureCallback;
+import org.apache.http.entity.ByteArrayEntity;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.nio.client.HttpAsyncClient;
 
-import com.google.common.base.Supplier;
 import com.jive.foss.pnky.Pnky;
 import com.jive.foss.pnky.PnkyPromise;
 
@@ -34,23 +36,26 @@ import com.jive.foss.pnky.PnkyPromise;
  * @author Binh Tran
  */
 @Slf4j
-public final class RestClientInvocationHandler implements InvocationHandler
+public final class InvocationHandler implements java.lang.reflect.InvocationHandler
 {
   private final Supplier<String> rootUriSupplier;
   private final String rootConsume;
   private final String rootProduces;
   private final HttpAsyncClient httpAsyncClient;
   private final List<RestClientDeserializer> restClientDeserializers;
+  private final List<RestClientSerializer> restClientSerializers;
 
-  public RestClientInvocationHandler(
-      final Supplier<String> rootUrlSupplier,
+  public InvocationHandler(
+      final java.util.function.Supplier<String> rootUrlSupplier,
       final Class<?> klass,
       final HttpAsyncClient httpAsyncClient,
-      final List<RestClientDeserializer> restClientDeserializers)
+      final List<RestClientDeserializer> restClientDeserializers,
+      final List<RestClientSerializer> restClientSerializers)
   {
     this.httpAsyncClient = httpAsyncClient;
     this.rootUriSupplier = rootUrlSupplier;
     this.restClientDeserializers = restClientDeserializers;
+    this.restClientSerializers = restClientSerializers;
 
     this.rootConsume = Optional.ofNullable(klass.getAnnotation(Consumes.class))
         .map(Consumes::value)
@@ -69,11 +74,6 @@ public final class RestClientInvocationHandler implements InvocationHandler
   {
     log.debug("Proxy class [{}] method [{}] args [{}]", method.getDeclaringClass(), method, args);
 
-    if (method.getAnnotation(GET.class) == null)
-    {
-      throw new IllegalArgumentException("Only support GET method");
-    }
-
     if (!method.getReturnType().isAssignableFrom(PnkyPromise.class))
     {
       throw new IllegalArgumentException("Only return type com.jive.foss.pnky.PnkyPromise is supported");
@@ -91,7 +91,26 @@ public final class RestClientInvocationHandler implements InvocationHandler
       throw new IllegalArgumentException("Cannot return raw com.jive.foss.pnky.PnkyPromise type");
     }
 
-    final HttpUriRequest httpRequest = createHttpUriRequest(method, args);
+    final HttpUriRequest httpRequest;
+
+    final String uri = UriBuilderUtils.generateUrl(rootUriSupplier, method, args);
+
+    if (method.getAnnotation(GET.class) != null)
+    {
+      httpRequest = createHttpUriGetRequest(uri);
+    }
+    else if (method.getAnnotation(POST.class) != null)
+    {
+      httpRequest = setEntityForHttpRequest(new HttpPost(uri), method, args);
+    }
+    else if (method.getAnnotation(PUT.class) != null)
+    {
+      httpRequest = setEntityForHttpRequest(new HttpPut(uri), method, args);
+    }
+    else
+    {
+      throw new IllegalArgumentException("Only support GET method");
+    }
 
     final RestClientDeserializer restClientDeserializer = setHeaders(httpRequest, method);
 
@@ -103,17 +122,25 @@ public final class RestClientInvocationHandler implements InvocationHandler
       public void completed(final HttpResponse response)
       {
         final Object result;
-        try
+
+        if (returnedInnerType.equals(Void.class))
         {
-          final InputStream responseStream = response.getEntity().getContent();
-          result = restClientDeserializer.deserialize(responseStream, returnedInnerType);
+          resultPromise.resolve();
         }
-        catch (Exception e)
+        else
         {
-          resultPromise.reject(e);
-          return;
+          try
+          {
+            final InputStream responseStream = response.getEntity().getContent();
+            result = restClientDeserializer.deserialize(responseStream, returnedInnerType);
+          }
+          catch (Exception e)
+          {
+            resultPromise.reject(e);
+            return;
+          }
+          resultPromise.resolve(result);
         }
-        resultPromise.resolve(result);
       }
 
       public void failed(final Exception ex)
@@ -131,22 +158,92 @@ public final class RestClientInvocationHandler implements InvocationHandler
     return resultPromise;
   }
 
+  private HttpUriRequest createHttpUriGetRequest(final String uri)
+      throws URISyntaxException
+  {
+    return new HttpGet(uri);
+  }
+
+
+  private HttpUriRequest setEntityForHttpRequest(
+      final HttpEntityEnclosingRequestBase baseRequest, final Method method, final Object[] args)
+  {
+    final String methodConsumes = Optional.ofNullable(method.getAnnotation(Consumes.class))
+        .map(Consumes::value)
+        .map(this::headerValueFromArray)
+        .orElse(rootConsume);
+
+    final String contentTypeHeader;
+
+    if (methodConsumes != null)
+    {
+      contentTypeHeader = methodConsumes;
+    }
+    else
+    {
+      contentTypeHeader = MediaType.WILDCARD;
+    }
+
+    baseRequest.setHeader(HttpHeaders.CONTENT_TYPE, contentTypeHeader);
+
+    Object entityPojo = UriBuilderUtils.getEntityObject(method, args);
+
+    final HttpEntity httpEntity;
+
+    if (entityPojo instanceof InputStream)
+    {
+      httpEntity = new InputStreamEntity(
+          (InputStream)entityPojo, ContentType.create(contentTypeHeader));
+    }
+    else
+    {
+      RestClientSerializer serializer = null;
+
+      for (RestClientSerializer s : restClientSerializers)
+      {
+        if (s.getSupportedMediaTypes().contains(contentTypeHeader))
+        {
+          serializer = s;
+          break;
+        }
+      }
+
+      if (serializer == null)
+      {
+        throw new IllegalStateException(
+            String.format("Cannot find a suitable serializer for method %s#%s",
+                method.getDeclaringClass().getCanonicalName(), method.getName()));
+      }
+
+      try
+      {
+        httpEntity = new StringEntity(
+            serializer.serialize(entityPojo),
+            ContentType.create(contentTypeHeader));
+      }
+      catch (Exception e)
+      {
+        throw new RuntimeException("Failed to serialize entity", e);
+      }
+    }
+
+    baseRequest.setEntity(httpEntity);
+
+    return baseRequest;
+  }
+
   private RestClientDeserializer setHeaders(final HttpUriRequest httpRequest, final Method method)
   {
     final String methodProduces = Optional.ofNullable(method.getAnnotation(Produces.class))
         .map(Produces::value)
         .map(this::headerValueFromArray)
-        .orElse(null);
+        .orElse(rootProduces);
 
     final String acceptHeader;
 
     if (methodProduces != null)
     {
       acceptHeader = methodProduces;
-    }
-    else if (rootProduces != null)
-    {
-      acceptHeader = rootProduces;
     }
     else
     {
@@ -162,14 +259,6 @@ public final class RestClientInvocationHandler implements InvocationHandler
         .orElseThrow(() -> new IllegalStateException(
             "Cannot find suitable deserializer for media type "
                 + acceptHeader));
-  }
-
-  private HttpUriRequest createHttpUriRequest(final Method method, final Object[] args)
-      throws URISyntaxException
-  {
-    final String uri = RestClientUriBuilderUtils.generateUrl(rootUriSupplier, method, args);
-
-    return new HttpGet(uri);
   }
 
   private String headerValueFromArray(final String[] array)
