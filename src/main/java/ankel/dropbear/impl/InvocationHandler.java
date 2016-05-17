@@ -1,5 +1,6 @@
 package ankel.dropbear.impl;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -16,6 +17,7 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 
 import ankel.dropbear.RestClientDeserializer;
+import ankel.dropbear.RestClientResponseException;
 import ankel.dropbear.RestClientSerializer;
 import lombok.extern.slf4j.Slf4j;
 
@@ -123,23 +125,41 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
       {
         final Object result;
 
-        if (returnedInnerType.equals(Void.class))
+        if (response.getStatusLine().getStatusCode() / 100 == 2)
         {
-          resultPromise.resolve();
+
+          if (returnedInnerType.equals(Void.class))
+          {
+            resultPromise.resolve();
+          }
+          else
+          {
+            try
+            {
+              final InputStream responseStream = response.getEntity().getContent();
+              result = restClientDeserializer.deserialize(responseStream, returnedInnerType);
+            }
+            catch (Exception e)
+            {
+              resultPromise.reject(e);
+              return;
+            }
+            resultPromise.resolve(result);
+          }
         }
         else
         {
+          InputStream content = null;
           try
           {
-            final InputStream responseStream = response.getEntity().getContent();
-            result = restClientDeserializer.deserialize(responseStream, returnedInnerType);
+            content = response.getEntity().getContent();
           }
-          catch (Exception e)
+          catch (IOException e)
           {
-            resultPromise.reject(e);
-            return;
+            log.error("Failed to extract input stream content from response", e);
           }
-          resultPromise.resolve(result);
+          resultPromise.reject(new RestClientResponseException(
+              response.getStatusLine().getStatusCode(), content));
         }
       }
 

@@ -3,14 +3,19 @@ package ankel.dropbear;
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.junit.Assert.*;
 
+import java.io.InputStreamReader;
 import java.lang.reflect.Method;
+import java.nio.charset.Charset;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 
 import ankel.dropbear.impl.UriBuilderUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.ByteStreams;
+import com.google.common.io.CharStreams;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
 import org.apache.http.impl.nio.client.HttpAsyncClients;
 import org.junit.After;
@@ -84,6 +89,40 @@ public class RestClientBuilderTest
             .withBody("Some text")));
 
     assertEquals("Some text", restInterface.getFooString().get());
+
+    verify(1, getRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler")));
+  }
+
+  @Test
+  public void testGet404() throws Exception
+  {
+    stubFor(get(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .willReturn(aResponse()
+            .withStatus(404)
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN)
+            .withBody("Not Found response body")));
+
+    try
+    {
+      restInterface.getFooString().get();
+    }
+    catch (ExecutionException e)
+    {
+      final Throwable cause = e.getCause();
+      assertTrue(cause instanceof RestClientResponseException);
+
+      RestClientResponseException responseException = (RestClientResponseException) cause;
+      assertEquals(404, responseException.getStatusCode());
+
+      final String content = CharStreams.toString(
+          new InputStreamReader(responseException.getRawContent(), Charset.defaultCharset()));
+
+      assertEquals("Not Found response body", content);
+    }
 
     verify(1, getRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
