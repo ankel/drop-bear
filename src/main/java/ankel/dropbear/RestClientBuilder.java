@@ -59,6 +59,7 @@ public class RestClientBuilder
     if (restClientSerializers.size() == 0)
     {
       restClientSerializers.add(new JacksonRestClientSerializationSupport(objectMapper));
+      restClientSerializers.add(RawTextRestClientSerializationSupport.getDefaultInstance());
     }
   }
 
