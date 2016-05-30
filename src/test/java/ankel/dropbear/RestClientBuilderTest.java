@@ -1,20 +1,7 @@
 package ankel.dropbear;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.Assert.*;
-
-import java.io.InputStreamReader;
-import java.lang.reflect.Method;
-import java.nio.charset.Charset;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-
 import ankel.dropbear.impl.UriBuilderUtils;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.io.ByteStreams;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import com.google.common.io.CharStreams;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
 import org.apache.http.impl.nio.client.HttpAsyncClients;
@@ -23,7 +10,17 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
+import java.io.InputStreamReader;
+import java.lang.reflect.Method;
+import java.nio.charset.Charset;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * @author Binh Tran
@@ -49,12 +46,12 @@ public class RestClientBuilderTest
     httpAsyncClient = HttpAsyncClients.createDefault();
     httpAsyncClient.start();
 
-    restInterface = RestClientBuilder.newBuilder(httpAsyncClient)
+    restInterface = RestClientBuilder.newBuilder()
         .url("http://localhost:8089")
-        .addRestClientDeserializer(RawTextRestClientSerializationSupport.getDefaultInstance())
-        .addRestClientDeserializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
-        .addRestClientSerializer(RawTextRestClientSerializationSupport.getDefaultInstance())
-        .addRestClientSerializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
+//        .addRestClientDeserializer(RawTextRestClientSerializationSupport.getDefaultInstance())
+//        .addRestClientDeserializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
+//        .addRestClientSerializer(RawTextRestClientSerializationSupport.getDefaultInstance())
+//        .addRestClientSerializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
         .of(RestInterface.class);
 
     requestObject = new RestInterface.RequestObject("42", "answer to everything");
@@ -203,13 +200,13 @@ public class RestClientBuilderTest
   public void testPutString() throws Exception
   {
     stubFor(put(urlEqualTo("/start/foo"))
-      .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
-      .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.TEXT_PLAIN))
-      .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
-      .withRequestBody(equalTo("put string"))
-      .willReturn(aResponse()
-          .withStatus(202)
-          .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.TEXT_PLAIN))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("put string"))
+        .willReturn(aResponse()
+            .withStatus(202)
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
 
     restInterface.putStringReturnVoid("put string").get();
 
@@ -221,16 +218,58 @@ public class RestClientBuilderTest
   }
 
   @Test
+  public void testPostForm() throws Exception
+  {
+    stubFor(post(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_FORM_URLENCODED))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .willReturn(aResponse()
+            .withStatus(200)
+            .withBody("{\"id\":\"123\"}")
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
+
+    final RestInterface.ResponseObject responseObject = restInterface.postForm("123").get();
+
+    verify(1, postRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_FORM_URLENCODED))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("id=123")));
+  }
+
+  @Test
+  public void testPutForm() throws Exception
+  {
+    stubFor(put(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_FORM_URLENCODED))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .willReturn(aResponse()
+            .withStatus(200)
+            .withBody("{\"id\":\"123\"}")
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
+
+    final RestInterface.ResponseObject responseObject = restInterface.putForm("123").get();
+
+    verify(1, putRequestedFor(urlEqualTo("/start/foo"))
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_FORM_URLENCODED))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("id=123")));
+  }
+
+  @Test
   public void testPostObject() throws Exception
   {
     stubFor(post(urlEqualTo("/start/foo"))
-      .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
-      .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
-      .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
-      .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}"))
-      .willReturn(aResponse()
-          .withStatus(202)
-          .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}"))
+        .willReturn(aResponse()
+            .withStatus(202)
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
 
     restInterface.postObjectReturnVoid(requestObject).get();
 
@@ -245,14 +284,14 @@ public class RestClientBuilderTest
   public void testPutObject() throws Exception
   {
     stubFor(put(urlEqualTo("/start/foo"))
-      .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
-      .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
-      .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
-      .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}"))
-      .willReturn(aResponse()
-          .withStatus(200)
-          .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
-          .withBody("{\"foo\": \"bar\"}")));
+        .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.CONTENT_TYPE, equalTo(MediaType.APPLICATION_JSON))
+        .withHeader(HttpHeaders.USER_AGENT, containing("InvocationHandler"))
+        .withRequestBody(equalTo("{\"id\":\"42\",\"requestType\":\"answer to everything\"}"))
+        .willReturn(aResponse()
+            .withStatus(200)
+            .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
+            .withBody("{\"foo\": \"bar\"}")));
 
     final Map<String, String> map = restInterface.putObject(requestObject).get();
 
