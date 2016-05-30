@@ -79,7 +79,6 @@ public class RestClientBuilder
    *
    * @return RestClientBuilder with default httpSyncClient;
    */
-
   public static RestClientBuilder newBuilder()
   {
     return new RestClientBuilder();

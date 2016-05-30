@@ -83,7 +83,9 @@ public class UriBuilderUtils
     {
       if (parameters[i].getAnnotation(FormParam.class) != null)
       {
-        nameValuePairs.add(new BasicNameValuePair(parameters[i].getAnnotation(FormParam.class).value(), arguments[i].toString()));
+        nameValuePairs.add(
+            new BasicNameValuePair(parameters[i].getAnnotation(FormParam.class).value(),
+                String.valueOf(arguments[i])));
       }
     }
     return nameValuePairs;

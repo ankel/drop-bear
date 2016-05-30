@@ -48,10 +48,10 @@ public class RestClientBuilderTest
 
     restInterface = RestClientBuilder.newBuilder()
         .url("http://localhost:8089")
-//        .addRestClientDeserializer(RawTextRestClientSerializationSupport.getDefaultInstance())
-//        .addRestClientDeserializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
-//        .addRestClientSerializer(RawTextRestClientSerializationSupport.getDefaultInstance())
-//        .addRestClientSerializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
+        // .addRestClientDeserializer(RawTextRestClientSerializationSupport.getDefaultInstance())
+        // .addRestClientDeserializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
+        // .addRestClientSerializer(RawTextRestClientSerializationSupport.getDefaultInstance())
+        // .addRestClientSerializer(new JacksonRestClientSerializationSupport(new ObjectMapper()))
         .of(RestInterface.class);
 
     requestObject = new RestInterface.RequestObject("42", "answer to everything");

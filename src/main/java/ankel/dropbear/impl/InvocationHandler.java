@@ -213,7 +213,14 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
 
     final HttpEntity httpEntity;
 
-    if (contentTypeHeader.equals(MediaType.APPLICATION_JSON) || contentTypeHeader.equals(MediaType.TEXT_PLAIN))
+    if (contentTypeHeader.equals(MediaType.APPLICATION_FORM_URLENCODED))
+    {
+      // Get the Name/Value Pairs
+
+      final List<NameValuePair> nameValuePairs = UriBuilderUtils.getFormParameters(method, args);
+      httpEntity = EntityBuilder.create().setParameters(nameValuePairs).build();
+    }
+    else
     {
 
       final Object entityPojo = UriBuilderUtils.getEntityObject(method, args);
@@ -254,17 +261,6 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
           throw new RuntimeException("Failed to serialize entity", e);
         }
       }
-    }
-    else if (contentTypeHeader.equals(MediaType.APPLICATION_FORM_URLENCODED))
-    {
-      // Get the Name/Value Pairs
-
-      final List<NameValuePair> nameValuePairs = UriBuilderUtils.getFormParameters(method, args);
-      httpEntity = EntityBuilder.create().setParameters(nameValuePairs).build();
-    }
-    else
-    {
-      throw new RuntimeException(String.format("Content Type [%s] is not supported at this time", contentTypeHeader));
     }
 
     baseRequest.setEntity(httpEntity);
