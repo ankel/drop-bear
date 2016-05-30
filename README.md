@@ -4,3 +4,5 @@
 A java async http client. Named after the famous [Dropwizard](http://www.dropwizard.io).  
 
 It's also [a famous creature of Australia](https://en.wikipedia.org/wiki/File:Dropbear.jpg)
+
+![dropbear](https://upload.wikimedia.org/wikipedia/commons/7/71/Dropbear.jpg)
