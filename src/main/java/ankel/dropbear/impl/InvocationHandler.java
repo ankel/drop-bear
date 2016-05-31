@@ -1,5 +1,26 @@
 package ankel.dropbear.impl;
 
+import ankel.dropbear.RestClientDeserializer;
+import ankel.dropbear.RestClientResponseException;
+import ankel.dropbear.RestClientSerializer;
+import com.jive.foss.pnky.Pnky;
+import com.jive.foss.pnky.PnkyPromise;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.EntityBuilder;
+import org.apache.http.client.methods.*;
+import org.apache.http.concurrent.FutureCallback;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.nio.client.HttpAsyncClient;
+
+import javax.ws.rs.*;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
@@ -9,29 +30,6 @@ import java.net.URISyntaxException;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import javax.ws.rs.*;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-
-import ankel.dropbear.RestClientDeserializer;
-import ankel.dropbear.RestClientResponseException;
-import ankel.dropbear.RestClientSerializer;
-import lombok.extern.slf4j.Slf4j;
-
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.*;
-import org.apache.http.concurrent.FutureCallback;
-import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.nio.client.HttpAsyncClient;
-
-import com.jive.foss.pnky.Pnky;
-import com.jive.foss.pnky.PnkyPromise;
 
 /**
  * @author Binh Tran
@@ -110,7 +108,7 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
     }
     else
     {
-      throw new IllegalArgumentException("Only support GET method");
+      throw new IllegalArgumentException("Only support GET, POST and PUT method");
     }
 
     final RestClientDeserializer restClientDeserializer = setHeaders(httpRequest, method);
@@ -192,7 +190,6 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
     return new HttpGet(uri);
   }
 
-
   private HttpUriRequest setEntityForHttpRequest(
       final HttpEntityEnclosingRequestBase baseRequest, final Method method, final Object[] args)
   {
@@ -214,44 +211,55 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
 
     baseRequest.setHeader(HttpHeaders.CONTENT_TYPE, contentTypeHeader);
 
-    Object entityPojo = UriBuilderUtils.getEntityObject(method, args);
-
     final HttpEntity httpEntity;
 
-    if (entityPojo instanceof InputStream)
+    if (contentTypeHeader.equals(MediaType.APPLICATION_FORM_URLENCODED))
     {
-      httpEntity = new InputStreamEntity(
-          (InputStream)entityPojo, ContentType.create(contentTypeHeader));
+      // Get the Name/Value Pairs
+
+      final List<NameValuePair> nameValuePairs = UriBuilderUtils.getFormParameters(method, args);
+      httpEntity = EntityBuilder.create().setParameters(nameValuePairs).build();
     }
     else
     {
-      RestClientSerializer serializer = null;
 
-      for (RestClientSerializer s : restClientSerializers)
+      final Object entityPojo = UriBuilderUtils.getEntityObject(method, args);
+
+      if (entityPojo instanceof InputStream)
       {
-        if (s.getSupportedMediaTypes().contains(contentTypeHeader))
+        httpEntity = new InputStreamEntity(
+            (InputStream) entityPojo, ContentType.create(contentTypeHeader));
+      }
+      else
+      {
+        RestClientSerializer serializer = null;
+
+        for (RestClientSerializer s : restClientSerializers)
         {
-          serializer = s;
-          break;
+          if (s.getSupportedMediaTypes().contains(contentTypeHeader))
+          {
+            serializer = s;
+            break;
+          }
         }
-      }
 
-      if (serializer == null)
-      {
-        throw new IllegalStateException(
-            String.format("Cannot find a suitable serializer for method %s#%s",
-                method.getDeclaringClass().getCanonicalName(), method.getName()));
-      }
+        if (serializer == null)
+        {
+          throw new IllegalStateException(
+              String.format("Cannot find a suitable serializer for method %s#%s",
+                  method.getDeclaringClass().getCanonicalName(), method.getName()));
+        }
 
-      try
-      {
-        httpEntity = new StringEntity(
-            serializer.serialize(entityPojo),
-            ContentType.create(contentTypeHeader));
-      }
-      catch (Exception e)
-      {
-        throw new RuntimeException("Failed to serialize entity", e);
+        try
+        {
+          httpEntity = new StringEntity(
+              serializer.serialize(entityPojo),
+              ContentType.create(contentTypeHeader));
+        }
+        catch (Exception e)
+        {
+          throw new RuntimeException("Failed to serialize entity", e);
+        }
       }
     }
 
@@ -275,7 +283,8 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
     }
     else
     {
-      acceptHeader = MediaType.WILDCARD;  //TODO: default to wildcard, not sure if that's a good idea.
+      acceptHeader = MediaType.WILDCARD; // TODO: default to wildcard, not sure if that's a good
+                                         // idea.
     }
 
     httpRequest.setHeader(HttpHeaders.ACCEPT, acceptHeader);

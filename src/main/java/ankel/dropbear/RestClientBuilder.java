@@ -1,12 +1,16 @@
 package ankel.dropbear;
 
 import ankel.dropbear.impl.InvocationHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Lists;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import org.apache.http.Header;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
 import org.apache.http.nio.client.HttpAsyncClient;
 
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -16,14 +20,86 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class RestClientBuilder
 {
-  private final HttpAsyncClient httpAsyncClient;
+  private HttpAsyncClient httpAsyncClient;
   private Supplier<String> urlSupplier = null;
-  private List<RestClientDeserializer> restClientDeserializers = new ArrayList<>();
-  private List<RestClientSerializer> restClientSerializers = new ArrayList<>();
+  private final List<RestClientDeserializer> restClientDeserializers = Lists.newArrayList();
+  private final List<RestClientSerializer> restClientSerializers = Lists.newArrayList();
+  private final List<Header> defaultHeaders = Lists.newArrayList();
+  private ObjectMapper objectMapper;
 
-  public static RestClientBuilder newBuilder(final HttpAsyncClient httpAsyncClient)
+  private void setDefaultObjectMapper()
   {
-    return new RestClientBuilder(httpAsyncClient);
+    if (objectMapper == null)
+    {
+      objectMapper = new ObjectMapper();
+    }
+  }
+
+  private void setDefaultDeserializers()
+  {
+    if (objectMapper == null)
+    {
+      throw new RuntimeException("ObjectMapper is null");
+    }
+
+    if (restClientDeserializers.size() == 0)
+    {
+      restClientDeserializers.add(new JacksonRestClientSerializationSupport(objectMapper));
+      restClientDeserializers.add(RawTextRestClientSerializationSupport.getDefaultInstance());
+    }
+  }
+
+  private void setDefaultSerializers()
+  {
+    if (objectMapper == null)
+    {
+      throw new RuntimeException("ObjectMapper is null");
+    }
+
+    if (restClientSerializers.size() == 0)
+    {
+      restClientSerializers.add(new JacksonRestClientSerializationSupport(objectMapper));
+      restClientSerializers.add(RawTextRestClientSerializationSupport.getDefaultInstance());
+    }
+  }
+
+  private void setDefaultHttpClient()
+  {
+    final HttpAsyncClientBuilder httpAsyncClientBuilder = HttpAsyncClientBuilder.create();
+    if (defaultHeaders.size() > 0)
+    {
+      httpAsyncClientBuilder.setDefaultHeaders(defaultHeaders);
+    }
+    final CloseableHttpAsyncClient closeableHttpAsyncClient = httpAsyncClientBuilder.build();
+    closeableHttpAsyncClient.start();
+    httpAsyncClient = closeableHttpAsyncClient;
+  }
+
+  /**
+   *
+   * @return RestClientBuilder with default httpSyncClient;
+   */
+  public static RestClientBuilder newBuilder()
+  {
+    return new RestClientBuilder();
+  }
+
+  public RestClientBuilder setObjectMapper(ObjectMapper objectMapper)
+  {
+    this.objectMapper = objectMapper;
+    return this;
+  }
+
+  public RestClientBuilder setHttpAsyncClient(HttpAsyncClient httpAsyncClient)
+  {
+    this.httpAsyncClient = httpAsyncClient;
+    return this;
+  }
+
+  public RestClientBuilder addDefaultHeader(final Header header)
+  {
+    defaultHeaders.add(header);
+    return this;
   }
 
   public RestClientBuilder urlSupplier(final Supplier<String> urlSupplier)
@@ -57,6 +133,11 @@ public class RestClientBuilder
     {
       throw new NullPointerException("No url supplier specified");
     }
+
+    setDefaultObjectMapper();
+    setDefaultDeserializers();
+    setDefaultSerializers();
+    setDefaultHttpClient();
 
     return (T) Proxy.newProxyInstance(
         klass.getClassLoader(),

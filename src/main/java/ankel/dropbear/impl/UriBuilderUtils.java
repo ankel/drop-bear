@@ -1,15 +1,20 @@
 package ankel.dropbear.impl;
 
+import com.google.common.collect.Lists;
 import lombok.experimental.UtilityClass;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.message.BasicNameValuePair;
 
+import javax.ws.rs.FormParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -63,8 +68,27 @@ public class UriBuilderUtils
     }
 
     throw new IllegalArgumentException(
-        String.format("There is no suitable entity argument from [%s]. All arguments are annotated with PathParam or QueryParam",
-        method.toGenericString()));
+        String.format(
+            "There is no suitable entity argument from [%s]. All arguments are annotated with PathParam or QueryParam",
+            method.toGenericString()));
+  }
+
+  public static List<NameValuePair> getFormParameters(
+      final Method method,
+      final Object[] arguments)
+  {
+    final List<NameValuePair> nameValuePairs = Lists.newArrayList();
+    final Parameter[] parameters = method.getParameters();
+    for (int i = 0; i < parameters.length; ++i)
+    {
+      if (parameters[i].getAnnotation(FormParam.class) != null)
+      {
+        nameValuePairs.add(
+            new BasicNameValuePair(parameters[i].getAnnotation(FormParam.class).value(),
+                String.valueOf(arguments[i])));
+      }
+    }
+    return nameValuePairs;
   }
 
   private static String getPathFromClass(final Class<?> declaringClass)

@@ -1,21 +1,18 @@
 package ankel.dropbear;
 
-import java.util.Map;
-
-import javax.print.attribute.standard.Media;
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-
 import com.jive.foss.pnky.PnkyPromise;
 import lombok.RequiredArgsConstructor;
+
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import java.util.Map;
 
 /**
  * @author Binh Tran
  */
 @Path("start")
 @Produces(MediaType.APPLICATION_JSON)
-public interface RestInterface
-{
+public interface RestInterface {
   @Path("{p1}/{p2}")
   @GET
   String getFooWithParams(
@@ -57,10 +54,28 @@ public interface RestInterface
   @Consumes(MediaType.APPLICATION_JSON)
   PnkyPromise<Map<String, String>> putObject(final RequestObject value);
 
+  @Path("foo")
+  @POST
+  @Produces(MediaType.APPLICATION_JSON)
+  @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+  PnkyPromise<ResponseObject> postForm(@FormParam("id") final String id);
+
+
+  @Path("foo")
+  @PUT
+  @Produces(MediaType.APPLICATION_JSON)
+  @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+  PnkyPromise<ResponseObject> putForm(@FormParam("id") final String id);
+
+
   @RequiredArgsConstructor
-  public static class RequestObject
-  {
+  public static class RequestObject {
     public final String id;
     public final String requestType;
+  }
+
+  @RequiredArgsConstructor
+  public static class ResponseObject {
+    public final String id;
   }
 }
