@@ -84,6 +84,12 @@ public class RestClientBuilder
     return new RestClientBuilder();
   }
 
+  public RestClientBuilder setObjectMapper(ObjectMapper objectMapper)
+  {
+    this.objectMapper = objectMapper;
+    return this;
+  }
+
   public RestClientBuilder setHttpAsyncClient(HttpAsyncClient httpAsyncClient)
   {
     this.httpAsyncClient = httpAsyncClient;
