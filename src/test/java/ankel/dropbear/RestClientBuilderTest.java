@@ -16,15 +16,11 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * @author Binh Tran
- */
 public class RestClientBuilderTest
 {
   @Rule
@@ -84,8 +80,8 @@ public class RestClientBuilderTest
             .withStatus(200)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN)
             .withBody("Some text")));
-
-    assertEquals("Some text", restInterface.getFooString().get());
+    System.out.println("_______________________________");
+    assertEquals("Some text", restInterface.getFooString().toBlocking().single());
 
     verify(1, getRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.TEXT_PLAIN))
@@ -120,9 +116,9 @@ public class RestClientBuilderTest
 
     try
     {
-      restInterface.getFooString().get();
+      restInterface.getFooString().toBlocking().single();
     }
-    catch (ExecutionException e)
+    catch (Throwable e)
     {
       final Throwable cause = e.getCause();
       assertTrue(cause instanceof RestClientResponseException);
@@ -161,7 +157,7 @@ public class RestClientBuilderTest
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
             .withBody("{\"foo\": \"bar\"}")));
 
-    final Map<String, String> map = restInterface.getFoo().get();
+    final Map<String, String> map = restInterface.getFoo().toBlocking().single();
 
     verify(1, getRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
@@ -184,7 +180,7 @@ public class RestClientBuilderTest
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
             .withBody("{\"foo\": \"bar\"}")));
 
-    final Map<String, String> map = restInterface.postFoo(42L).get();
+    final Map<String, String> map = restInterface.postFoo(42L).toBlocking().single();
 
     verify(1, postRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
@@ -208,7 +204,7 @@ public class RestClientBuilderTest
             .withStatus(202)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
 
-    restInterface.putStringReturnVoid("put string").get();
+    restInterface.putStringReturnVoid("put string").toBlocking();
 
     verify(1, putRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
@@ -229,7 +225,9 @@ public class RestClientBuilderTest
             .withBody("{\"id\":\"123\"}")
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
 
-    final RestInterface.ResponseObject responseObject = restInterface.postForm("123").get();
+    final RestInterface.ResponseObject responseObject = restInterface.postForm("123").toBlocking().single();
+
+    assertEquals("123", responseObject.id);
 
     verify(1, postRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
@@ -250,7 +248,7 @@ public class RestClientBuilderTest
             .withBody("{\"id\":\"123\"}")
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
 
-    final RestInterface.ResponseObject responseObject = restInterface.putForm("123").get();
+    final RestInterface.ResponseObject responseObject = restInterface.putForm("123").toBlocking().single();
 
     verify(1, putRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
@@ -271,7 +269,7 @@ public class RestClientBuilderTest
             .withStatus(202)
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)));
 
-    restInterface.postObjectReturnVoid(requestObject).get();
+    restInterface.postObjectReturnVoid(requestObject).toBlocking();
 
     verify(1, postRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
@@ -293,7 +291,7 @@ public class RestClientBuilderTest
             .withHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
             .withBody("{\"foo\": \"bar\"}")));
 
-    final Map<String, String> map = restInterface.putObject(requestObject).get();
+    final Map<String, String> map = restInterface.putObject(requestObject).toBlocking().single();
 
     verify(1, putRequestedFor(urlEqualTo("/start/foo"))
         .withHeader(HttpHeaders.ACCEPT, equalTo(MediaType.APPLICATION_JSON))
