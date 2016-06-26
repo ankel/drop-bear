@@ -35,6 +35,7 @@
         <deps.slf4j.version>1.7.7</deps.slf4j.version>
         <deps.wiremock.version>1.58</deps.wiremock.version>
         <deps.guava.version>19.0-rc1</deps.guava.version>
+        <deps.rxjava.version>1.1.6</deps.rxjava.version>
 
     </properties>
 
@@ -43,6 +44,12 @@
             <groupId>javax.ws.rs</groupId>
             <artifactId>jsr311-api</artifactId>
             <version>${deps.jsr311.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.reactivex</groupId>
+            <artifactId>rxjava</artifactId>
+            <version>${deps.rxjava.version}</version>
         </dependency>
 
         <dependency>
@@ -101,18 +108,6 @@
         </dependency>
 
         <dependency>
-            <groupId>com.jive.foss.pnky</groupId>
-            <artifactId>pnky-promise</artifactId>
-            <version>${deps.pnky.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.google.guava</groupId>
-                    <artifactId>guava</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${deps.jackson.version}</version>
@@ -164,7 +159,6 @@
             <version>${deps.hamcrest.version}</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>

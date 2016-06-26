@@ -1,7 +1,7 @@
 package ankel.dropbear;
 
-import com.jive.foss.pnky.PnkyPromise;
 import lombok.RequiredArgsConstructor;
+import rx.Observable;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
@@ -23,59 +23,59 @@ public interface RestInterface {
 
   @Path("foo")
   @GET
-  PnkyPromise<Map<String, String>> getFoo();
+  Observable<Map<String, String>> getFoo();
 
   @Path("foo")
   @GET
   @Produces(MediaType.TEXT_PLAIN)
-  PnkyPromise<String> getFooString();
+  Observable<String> getFooString();
 
   @Path("foo")
   @POST
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_JSON)
-  PnkyPromise<Map<String, String>> postFoo(final long value);
+  Observable<Map<String, String>> postFoo(final long value);
 
   @Path("foo")
   @PUT
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.TEXT_PLAIN)
-  PnkyPromise<Void> putStringReturnVoid(final String value);
+  Observable<Void> putStringReturnVoid(final String value);
 
   @Path("foo")
   @POST
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_JSON)
-  PnkyPromise<Void> postObjectReturnVoid(final RequestObject value);
+  Observable<Void> postObjectReturnVoid(final RequestObject value);
 
   @Path("foo")
   @PUT
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_JSON)
-  PnkyPromise<Map<String, String>> putObject(final RequestObject value);
+  Observable<Map<String, String>> putObject(final RequestObject value);
 
   @Path("foo")
   @POST
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-  PnkyPromise<ResponseObject> postForm(@FormParam("id") final String id);
+  Observable<ResponseObject> postForm(@FormParam("id") final String id);
 
 
   @Path("foo")
   @PUT
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-  PnkyPromise<ResponseObject> putForm(@FormParam("id") final String id);
+  Observable<ResponseObject> putForm(@FormParam("id") final String id);
 
 
   @RequiredArgsConstructor
-  public static class RequestObject {
+  class RequestObject {
     public final String id;
     public final String requestType;
   }
 
   @RequiredArgsConstructor
-  public static class ResponseObject {
+  class ResponseObject {
     public final String id;
   }
 }

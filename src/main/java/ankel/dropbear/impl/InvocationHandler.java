@@ -3,20 +3,17 @@ package ankel.dropbear.impl;
 import ankel.dropbear.RestClientDeserializer;
 import ankel.dropbear.RestClientResponseException;
 import ankel.dropbear.RestClientSerializer;
-import com.jive.foss.pnky.Pnky;
-import com.jive.foss.pnky.PnkyPromise;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.EntityBuilder;
 import org.apache.http.client.methods.*;
-import org.apache.http.concurrent.FutureCallback;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.nio.client.HttpAsyncClient;
+import rx.Observable;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.HttpHeaders;
@@ -73,9 +70,9 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
   {
     log.debug("Proxy class [{}] method [{}] args [{}]", method.getDeclaringClass(), method, args);
 
-    if (!method.getReturnType().isAssignableFrom(PnkyPromise.class))
+    if (!method.getReturnType().isAssignableFrom(rx.Observable.class))
     {
-      throw new IllegalArgumentException("Only return type com.jive.foss.pnky.PnkyPromise is supported");
+      throw new IllegalArgumentException("Only return type rx.Observable is supported");
     }
 
     final Type returnedInnerType;
@@ -87,7 +84,7 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
     }
     catch (Exception e)
     {
-      throw new IllegalArgumentException("Cannot return raw com.jive.foss.pnky.PnkyPromise type");
+      throw new IllegalArgumentException("Cannot return raw rx.Observable type");
     }
 
     final HttpUriRequest httpRequest;
@@ -113,75 +110,53 @@ public final class InvocationHandler implements java.lang.reflect.InvocationHand
 
     final RestClientDeserializer restClientDeserializer = setHeaders(httpRequest, method);
 
-    final Pnky resultPromise = Pnky.create();
-
-    httpAsyncClient.execute(httpRequest, new FutureCallback<HttpResponse>()
+    return Observable.from(httpAsyncClient.execute(httpRequest, null)).flatMap((response) ->
     {
-
-      public void completed(final HttpResponse response)
+      if (response.getStatusLine().getStatusCode() / 100 == 2)
       {
-        final Object result;
-
-        if (response.getStatusLine().getStatusCode() / 100 == 2)
+        if (returnedInnerType.equals(Void.class))
         {
-
-          if (returnedInnerType.equals(Void.class))
-          {
-            resultPromise.resolve();
-          }
-          else
-          {
-            try
-            {
-              final InputStream responseStream = response.getEntity().getContent();
-              result = restClientDeserializer.deserialize(responseStream, returnedInnerType);
-            }
-            catch (Exception e)
-            {
-              resultPromise.reject(e);
-              return;
-            }
-            resultPromise.resolve(result);
-          }
+          return Observable.empty();
         }
         else
         {
-          InputStream content = null;
           try
           {
-            content = response.getEntity().getContent();
+            final InputStream responseStream = response.getEntity().getContent();
+            final Object deserialize = restClientDeserializer.deserialize(responseStream, returnedInnerType);
+            return Observable.just(deserialize);
           }
-          catch (IOException e)
+          catch (Exception ex)
           {
-            log.error("Failed to extract input stream content from response", e);
+            return Observable.error(ex);
           }
-
-          Map<String, List<String>> headers = new HashMap<>();
-
-          for (final Header header : response.getAllHeaders())
-          {
-            headers.computeIfAbsent(header.getName(), (__) -> new ArrayList<>())
-                .add(header.getValue());
-          }
-
-          resultPromise.reject(new RestClientResponseException(
-              response.getStatusLine().getStatusCode(), content, headers));
         }
       }
-
-      public void failed(final Exception ex)
+      else
       {
-        resultPromise.reject(ex);
-      }
+        InputStream content = null;
+        try
+        {
+          content = response.getEntity().getContent();
+        }
+        catch (IOException e)
+        {
+          log.error("Failed to extract input stream content from response", e);
+        }
 
-      public void cancelled()
-      {
-        resultPromise.reject(new InterruptedException("Request is interrupted"));
+        Map<String, List<String>> headers = new HashMap<>();
+
+        for (final Header header : response.getAllHeaders())
+        {
+          headers.computeIfAbsent(header.getName(), (__) -> new ArrayList<>())
+              .add(header.getValue());
+        }
+
+        return Observable.error(new RestClientResponseException(
+            response.getStatusLine().getStatusCode(), content, headers));
       }
 
     });
-
-    return resultPromise;
   }
 
   private HttpUriRequest createHttpUriGetRequest(final String uri)
